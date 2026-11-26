@@ -5,128 +5,132 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.duoc.notixnuevo.viewmodel.ModoDatos
+import com.duoc.notixnuevo.data.Tramite
 import com.duoc.notixnuevo.viewmodel.NotixViewModel
-
-private enum class Seccion { USUARIOS, TRAMITES, FERIADOS }
+import com.duoc.notixnuevo.viewmodel.esNotario
+import com.duoc.notixnuevo.viewmodel.esPersona
 
 @Composable
 fun PantallaNotix(vm: NotixViewModel) {
     val e = vm.estado
-    var seccion by rememberSaveable { mutableStateOf(Seccion.USUARIOS) }
-    var usuarioId by rememberSaveable { mutableStateOf("") }
-    var tipo by rememberSaveable { mutableStateOf("") }
-    var descripcion by rememberSaveable { mutableStateOf("") }
-    var borrarId by remember { mutableStateOf<Long?>(null) }
+    val usuario = e.usuario
+    if (usuario == null) {
+        LoginScreen(vm)
+        return
+    }
 
-    borrarId?.let { id ->
+    var tipo by remember { mutableStateOf("") }
+    var descripcion by remember { mutableStateOf("") }
+    var observacion by remember { mutableStateOf("") }
+    var devolver by remember { mutableStateOf<Tramite?>(null) }
+    var eliminar by remember { mutableStateOf<Tramite?>(null) }
+
+    devolver?.let { tramite ->
         AlertDialog(
-            onDismissRequest = { borrarId = null },
-            title = { Text("Eliminar tramite") },
-            text = { Text("Se borrara del origen " + e.modo + ".") },
-            confirmButton = { TextButton(onClick = {
-                borrarId = null; vm.eliminarTramite(id)
-            }) { Text("Eliminar") } },
-            dismissButton = { TextButton(onClick = { borrarId = null }) {
+            onDismissRequest = { devolver = null },
+            title = { Text("Devolver tramite #${tramite.id}") },
+            text = {
+                OutlinedTextField(observacion, { observacion = it },
+                    label = { Text("Motivo de devolucion") })
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.resolverTramite(tramite.id, "Devuelto", observacion)
+                    devolver = null
+                    observacion = ""
+                }) { Text("Devolver") }
+            },
+            dismissButton = { TextButton(onClick = { devolver = null }) {
+                Text("Cancelar")
+            } }
+        )
+    }
+    eliminar?.let { tramite ->
+        AlertDialog(
+            onDismissRequest = { eliminar = null },
+            title = { Text("Eliminar tramite #${tramite.id}") },
+            text = { Text("Esta accion no se puede deshacer.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.eliminarTramite(tramite)
+                    eliminar = null
+                }) { Text("Eliminar") }
+            },
+            dismissButton = { TextButton(onClick = { eliminar = null }) {
                 Text("Cancelar")
             } }
         )
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Notix EFT", style = MaterialTheme.typography.headlineMedium)
-        Text("Solicitudes notariales - ejemplo academico")
-        Spacer(Modifier.height(8.dp))
-        Text("Origen actual: " + e.modo, style = MaterialTheme.typography.titleMedium)
+        Text("Notix", style = MaterialTheme.typography.headlineMedium)
+        Text("Hola, ${usuario.nombre} · ${usuario.tipo_usuario}")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { vm.cambiarModo(ModoDatos.DEMO) }) {
-                Text("Demo local")
-            }
-            OutlinedButton(onClick = { vm.cambiarModo(ModoDatos.XANO) }) {
-                Text("Xano real")
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            OutlinedButton(modifier = Modifier.weight(1f),
-                onClick = { seccion = Seccion.USUARIOS }) { Text("Usuarios") }
-            OutlinedButton(modifier = Modifier.weight(1f),
-                onClick = { seccion = Seccion.TRAMITES }) { Text("Tramites") }
-            OutlinedButton(modifier = Modifier.weight(1f),
-                onClick = { seccion = Seccion.FERIADOS }) { Text("Feriados") }
+            Button(onClick = vm::cargarDatos, enabled = !e.cargando) { Text("Actualizar (GET)") }
+            OutlinedButton(onClick = vm::salir, enabled = !e.cargando) { Text("Salir") }
         }
         if (e.cargando) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        if (e.mensaje.isNotBlank()) Text(e.mensaje, style = MaterialTheme.typography.bodySmall)
+        if (e.mensaje.isNotBlank()) Text(e.mensaje)
         Spacer(Modifier.height(8.dp))
-
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            when (seccion) {
-                Seccion.USUARIOS -> {
-                    item {
-                        Button(onClick = vm::cargarUsuarios, enabled = !e.cargando) {
-                            Text("Consultar usuarios (GET)")
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (esPersona(usuario.tipo_usuario)) {
+                item {
+                    Text("Crear solicitud", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(tipo, { tipo = it },
+                        label = { Text("Tipo de tramite") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(descripcion, { descripcion = it },
+                        label = { Text("Descripcion") }, modifier = Modifier.fillMaxWidth())
+                    Button(onClick = {
+                        vm.crearTramite(tipo, descripcion)
+                    }, enabled = !e.cargando) { Text("Enviar tramite (POST)") }
+                }
+            }
+            item {
+                Text(
+                    if (esNotario(usuario.tipo_usuario)) "Bandeja del notario"
+                    else "Mis tramites",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            items(e.tramites, key = { it.id }) { tramite ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("#${tramite.id} · ${tramite.tipo_tramite}",
+                            style = MaterialTheme.typography.titleMedium)
+                        Text(tramite.descripcion)
+                        Text("Estado: ${tramite.estado}")
+                        if (!tramite.observacion.isNullOrBlank()) {
+                            Text("Observacion: ${tramite.observacion}")
                         }
-                    }
-                    items(e.usuarios, key = { it.id }) { u ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(u.nombre + " (#" + u.id + ")")
-                                Text(u.correo + " / " + u.tipo_usuario)
+                        if (esNotario(usuario.tipo_usuario) &&
+                            tramite.estado == "Pendiente") {
+                            Row {
+                                Button(onClick = {
+                                    vm.resolverTramite(tramite.id, "Aprobado", "")
+                                }, enabled = !e.cargando) { Text("Aprobar (PUT)") }
+                                Spacer(Modifier.width(6.dp))
+                                OutlinedButton(onClick = { devolver = tramite },
+                                    enabled = !e.cargando) { Text("Devolver (PUT)") }
+                            }
+                        }
+                        if (esPersona(usuario.tipo_usuario) &&
+                            tramite.usuario_id == usuario.id &&
+                            tramite.estado != "Aprobado") {
+                            TextButton(onClick = { eliminar = tramite }, enabled = !e.cargando) {
+                                Text("Eliminar (DELETE)")
                             }
                         }
                     }
                 }
-                Seccion.TRAMITES -> {
-                    item {
-                        Button(onClick = vm::cargarTramites, enabled = !e.cargando) {
-                            Text("Consultar tramites (GET)")
-                        }
-                        OutlinedTextField(value = usuarioId, onValueChange = { usuarioId = it },
-                            label = { Text("ID usuario") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = tipo, onValueChange = { tipo = it },
-                            label = { Text("Tipo de tramite") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(value = descripcion, onValueChange = { descripcion = it },
-                            label = { Text("Descripcion") }, modifier = Modifier.fillMaxWidth())
-                        Button(onClick = { vm.crearTramite(usuarioId, tipo, descripcion) },
-                            enabled = !e.cargando) { Text("Crear tramite (POST)") }
-                    }
-                    items(e.tramites, key = { it.id }) { t ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text("#" + t.id + " " + t.tipo_tramite,
-                                    style = MaterialTheme.typography.titleMedium)
-                                Text(t.descripcion)
-                                Text("Usuario #" + t.usuario_id + " | Estado: " + t.estado)
-                                Row {
-                                    Button(onClick = { vm.cambiarEstado(t, "Aprobado") },
-                                        enabled = !e.cargando) { Text("Aprobar") }
-                                    Spacer(Modifier.width(8.dp))
-                                    OutlinedButton(onClick = { vm.cambiarEstado(t, "Devuelto") },
-                                        enabled = !e.cargando) { Text("Devolver") }
-                                }
-                                TextButton(onClick = { borrarId = t.id },
-                                    enabled = !e.cargando) { Text("Eliminar (DELETE)") }
-                            }
-                        }
-                    }
-                }
-                Seccion.FERIADOS -> {
-                    item {
-                        Button(onClick = vm::cargarFeriados, enabled = !e.cargando) {
-                            Text("Consultar feriados (GET)")
-                        }
-                    }
-                    items(e.feriados, key = { it.id }) { f ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(f.nombre)
-                                Text(f.fecha + " | " + f.pais)
-                            }
-                        }
-                    }
-                }
+            }
+            item {
+                Spacer(Modifier.height(6.dp))
+                Text("Feriados", style = MaterialTheme.typography.titleMedium)
+            }
+            items(e.feriados, key = { it.id }) { feriado ->
+                Text("${feriado.nombre} · ${feriado.fecha}")
             }
         }
     }

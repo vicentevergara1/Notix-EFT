@@ -5,41 +5,30 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.duoc.notixnuevo.data.DatosNotix
 import com.duoc.notixnuevo.data.Feriado
 import com.duoc.notixnuevo.data.NotixRepository
-import com.duoc.notixnuevo.data.RepositorioDemo
+import com.duoc.notixnuevo.data.Sesion
 import com.duoc.notixnuevo.data.Tramite
 import com.duoc.notixnuevo.data.Usuario
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
-enum class ModoDatos { DEMO, XANO }
 data class EstadoPantalla(
-    val modo: ModoDatos = ModoDatos.DEMO,
     val cargando: Boolean = false,
-    val mensaje: String = "Modo DEMO: no modifica Xano.",
-    val usuarios: List<Usuario> = emptyList(),
+    val mensaje: String = "",
+    val usuario: Usuario? = null,
     val tramites: List<Tramite> = emptyList(),
     val feriados: List<Feriado> = emptyList()
 )
 
 class NotixViewModel(
-    private val demo: DatosNotix = RepositorioDemo(),
-    private val xano: DatosNotix = NotixRepository()
+    private val repositorio: NotixRepository = NotixRepository()
 ) : ViewModel() {
     var estado by mutableStateOf(EstadoPantalla())
         private set
-    private val repo: DatosNotix
-        get() = if (estado.modo == ModoDatos.DEMO) demo else xano
 
-    fun cambiarModo(modo: ModoDatos) {
-        if (estado.cargando) return
-        estado = EstadoPantalla(
-            modo = modo,
-            mensaje = if (modo == ModoDatos.DEMO) "DEMO local: datos temporales."
-                else "XANO real: requiere endpoints funcionando."
-        )
-    }
+    // El token vive solo en memoria; al cerrar la app hay que iniciar sesion otra vez.
+    private var token: String? = null
 
     private fun ejecutar(accion: suspend () -> Unit) {
         if (estado.cargando) return
@@ -47,38 +36,106 @@ class NotixViewModel(
             estado = estado.copy(cargando = true, mensaje = "")
             try {
                 accion()
-            } catch (e: Exception) {
-                estado = estado.copy(mensaje = "Error " + estado.modo + ": " +
-                    (e.message ?: "Sin detalle") + ". Revisar endpoint.")
+            } catch (error: Exception) {
+                val detalle = if (error is HttpException) "HTTP " + error.code()
+                    else error.message ?: "Sin detalle"
+                estado = estado.copy(mensaje = "No se pudo completar la operacion: $detalle")
             } finally {
                 estado = estado.copy(cargando = false)
             }
         }
     }
 
-    fun cargarUsuarios() = ejecutar {
-        estado = estado.copy(usuarios = repo.listarUsuarios(), mensaje = "Usuarios consultados")
+    private suspend fun iniciar(sesion: Sesion) {
+        token = sesion.token
+        val tramites = runCatching { repositorio.tramites(sesion.token) }.getOrDefault(emptyList())
+        val feriados = runCatching { repositorio.feriados() }.getOrDefault(emptyList())
+        estado = EstadoPantalla(
+            usuario = sesion.usuario,
+            tramites = tramites,
+            feriados = feriados,
+            mensaje = "Sesion iniciada"
+        )
     }
-    fun cargarTramites() = ejecutar {
-        estado = estado.copy(tramites = repo.listarTramites(), mensaje = "Tramites consultados")
+
+    fun login(correo: String, password: String) {
+        validarCredenciales(correo, password)?.let {
+            estado = estado.copy(mensaje = it)
+            return
+        }
+        ejecutar { iniciar(repositorio.login(correo, password)) }
     }
-    fun cargarFeriados() = ejecutar {
-        estado = estado.copy(feriados = repo.listarFeriados(), mensaje = "Feriados consultados")
+
+    fun registro(nombre: String, correo: String, password: String) {
+        validarRegistro(nombre, correo, password)?.let {
+            estado = estado.copy(mensaje = it)
+            return
+        }
+        ejecutar { iniciar(repositorio.registrar(nombre, correo, password)) }
     }
-    fun crearTramite(usuarioId: String, tipo: String, descripcion: String) {
-        val error = validarTramite(usuarioId, tipo, descripcion)
-        if (error != null) { estado = estado.copy(mensaje = error); return }
+
+    fun salir() {
+        if (estado.cargando) return
+        token = null
+        estado = EstadoPantalla(mensaje = "Sesion cerrada")
+    }
+
+    private fun tokenActivo(): String = requireNotNull(token) { "Inicia sesion nuevamente." }
+
+    fun cargarDatos() = ejecutar {
+        val t = tokenActivo()
+        val lista = repositorio.tramites(t)
+        val feriados = runCatching { repositorio.feriados() }.getOrDefault(emptyList())
+        estado = estado.copy(tramites = lista, feriados = feriados, mensaje = "Datos actualizados")
+    }
+
+    fun crearTramite(tipo: String, descripcion: String) {
+        if (!esPersona(estado.usuario?.tipo_usuario.orEmpty())) {
+            estado = estado.copy(mensaje = "Solo una Persona puede crear un tramite.")
+            return
+        }
+        validarTramite(tipo, descripcion)?.let {
+            estado = estado.copy(mensaje = it)
+            return
+        }
         ejecutar {
-            repo.crear(usuarioId.trim().toLong(), tipo.trim(), descripcion.trim())
-            estado = estado.copy(tramites = repo.listarTramites(), mensaje = "Tramite creado")
+            val t = tokenActivo()
+            repositorio.crear(t, tipo, descripcion)
+            estado = estado.copy(tramites = repositorio.tramites(t), mensaje = "Tramite enviado")
         }
     }
-    fun cambiarEstado(t: Tramite, nuevo: String) = ejecutar {
-        repo.cambiarEstado(t, nuevo)
-        estado = estado.copy(tramites = repo.listarTramites(), mensaje = "Estado actualizado")
+
+    fun resolverTramite(id: Long, nuevoEstado: String, observacion: String) {
+        if (!esNotario(estado.usuario?.tipo_usuario.orEmpty())) {
+            estado = estado.copy(mensaje = "Solo el Notario puede revisar tramites.")
+            return
+        }
+        if (nuevoEstado != "Aprobado" && nuevoEstado != "Devuelto") {
+            estado = estado.copy(mensaje = "Estado no permitido")
+            return
+        }
+        if (nuevoEstado == "Devuelto" && observacion.isBlank()) {
+            estado = estado.copy(mensaje = "Escribe una observacion para devolver el tramite.")
+            return
+        }
+        ejecutar {
+            val t = tokenActivo()
+            repositorio.resolver(t, id, nuevoEstado,
+                if (nuevoEstado == "Devuelto") observacion else null)
+            estado = estado.copy(tramites = repositorio.tramites(t), mensaje = "Revision guardada")
+        }
     }
-    fun eliminarTramite(id: Long) = ejecutar {
-        repo.eliminar(id)
-        estado = estado.copy(tramites = repo.listarTramites(), mensaje = "Tramite eliminado")
+
+    fun eliminarTramite(tramite: Tramite) {
+        val u = estado.usuario
+        if (u == null || !esPersona(u.tipo_usuario) || tramite.usuario_id != u.id) {
+            estado = estado.copy(mensaje = "No puedes eliminar este tramite.")
+            return
+        }
+        ejecutar {
+            val t = tokenActivo()
+            repositorio.eliminar(t, tramite.id)
+            estado = estado.copy(tramites = repositorio.tramites(t), mensaje = "Tramite eliminado")
+        }
     }
 }

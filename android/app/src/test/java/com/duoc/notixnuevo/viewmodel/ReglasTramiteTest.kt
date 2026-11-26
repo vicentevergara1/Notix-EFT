@@ -4,8 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReglasTramiteTest {
-    @Test fun datosValidos() = assertNull(validarTramite("1", "Poder", "Ejemplo"))
-    @Test fun idInvalido() = assertNotNull(validarTramite("0", "Poder", "Ejemplo"))
-    @Test fun tipoVacio() = assertNotNull(validarTramite("1", "", "Ejemplo"))
-    @Test fun descripcionVacia() = assertNotNull(validarTramite("1", "Poder", ""))
+    @Test fun correoInvalido() = assertNotNull(validarCredenciales("ana", "clave12345"))
+    @Test fun registroValido() = assertNull(validarRegistro("Ana", "ana@notix.test", "clave12345"))
+    @Test fun registroCorto() = assertNotNull(validarRegistro("Ana", "ana@notix.test", "corta"))
+    @Test fun tramiteValido() = assertNull(validarTramite("Poder", "Gestion administrativa"))
+    @Test fun tramiteIncompleto() = assertNotNull(validarTramite("", "Gestion"))
+    @Test fun roles() {
+        assertTrue(esNotario("Notario"))
+        assertFalse(esNotario("Persona"))
+        assertTrue(esPersona("Persona"))
+    }
 }

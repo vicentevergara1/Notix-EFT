@@ -1,29 +1,38 @@
-# Guía de defensa — Notix EFT
+# Guía corta de defensa — Notix EFT
 
-## Dónde está cada cosa
+## Preguntas típicas
 
-- `MainActivity.kt`: inicia la aplicación Android.
-- `ui/PantallaNotix.kt`: interfaz y botones.
-- `viewmodel/NotixViewModel.kt`: acciones y estado.
-- `viewmodel/ReglasTramite.kt`: validaciones antes de guardar.
-- `data/NotixRepository.kt`: organiza las llamadas a Xano.
-- `data/RepositorioDemo.kt`: datos temporales de práctica, **no son Xano**.
-- `data/NotixApi.kt`: métodos HTTP GET, POST, PUT, DELETE.
-- `data/RetrofitCliente.kt`: cliente HTTP y conversión JSON.
-- `data/ApiConfig.kt`: URL base del API Group.
-- `data/Modelos.kt`: datos que corresponden al JSON.
+**¿Dónde inicia la aplicación?**
+En `MainActivity.kt`, que llama a `PantallaNotix(vm)`.
 
-## ¿Qué pasa al tocar Crear trámite?
+**¿Cómo funciona el login?**
+`LoginScreen.kt` llama `vm.login()`. El ViewModel usa `NotixRepository.login()`, que llama a Retrofit `POST /auth/login`. Xano valida el usuario y entrega `authToken`. Después llamamos `GET /auth/me` para obtener su rol.
 
-Pantalla → ViewModel → Validación → Repositorio → Retrofit → Endpoint POST /tramites → Xano Database → respuesta → pantalla.
+**¿Qué es el token?**
+Un comprobante de sesión generado por Xano que se manda como `Authorization: Bearer TOKEN` al consultar y cambiar trámites. No es la contraseña.
 
-## Explicaciones cortas
+**¿Por qué un usuario Persona no puede aprobar?**
+La interfaz oculta ese botón y el ViewModel lo rechaza. Más importante: Xano también debe comprobar el rol de la cuenta autenticada y devolver HTTP 403 a quien no sea Notario.
 
-**GET:** consulta registros. **POST:** crea. **PUT:** modifica. **DELETE:** elimina. **Retrofit:** conecta Android con la API REST y recibe JSON. **Xano:** almacena los registros en tablas y expone endpoints HTTP.
+**¿Cómo se crea un trámite?**
+`PantallaNotix.kt` → `NotixViewModel.crearTramite()` → `validarTramite()` → `NotixRepository.crear()` → `NotixApi.crear()` → `POST /tramites` → Xano guarda el registro usando el ID del usuario autenticado.
 
-## Estados de verificación
+**¿Cómo se aprueba?**
+El Notario presiona Aprobar en pantalla → ViewModel → Repository → `PUT /tramites/{id}`. Xano verifica rol Notario y estado pendiente; guarda estado Aprobado.
 
-- DEMO local: lógica probada aisladamente en Kotlin/JVM; datos no persistentes.
-- Xano real: requiere reparar referencias a tablas eliminadas y ejecutar las APIs.
-- Android: compilación y prueba en Android Studio pendientes.
-- La rúbrica específica del examen final aún no se ha proporcionado.
+**¿Cómo se consultan feriados?**
+`GET /feriados` mediante Retrofit; Xano lee Database/feriados. No confundir con la consulta directa a Nager.Date del Notix anterior.
+
+**¿Qué ocurre si Xano falla?**
+No se simula éxito. El ViewModel captura el error y lo muestra; los registros no se modifican localmente.
+
+**¿Qué es CRUD?**
+Create (POST), Read (GET), Update (PUT), Delete (DELETE).
+
+## Evidencias que faltan
+
+- Ejecutar y comprobar Xano (auth, roles, CRUD).
+- Compilar y probar Android Studio.
+- Verificar criterio por criterio cuando llegue la rúbrica EFT.
+
+No afirmar que todo está funcionando hasta contar con resultados comprobados.

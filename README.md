@@ -1,57 +1,55 @@
-# Notix-EFT — versión simple y explicable
+# Notix-EFT · app académica con autenticación y API REST
 
-App Android académica Kotlin/Jetpack Compose para el caso NotariaX. Repositorio nuevo, separado de la entrega antigua.
+Nueva versión del caso NotariaX orientada a comprender y defender su funcionamiento.
 
-## Dos modos claramente identificados
+## Estado de implementación
 
-- **DEMO local:** muestra usuarios/feriados de ejemplo y permite crear, aprobar, devolver y eliminar trámites sin internet; no guarda en Xano y los cambios se pierden al reiniciar.
-- **XANO real:** consume la API REST y las tablas `usuarios`, `tramites` y `feriados` del grupo Notix mediante Retrofit; necesita que los endpoints estén reparados.
+- **Android (código creado):** pantalla de registro e inicio de sesión, separación Persona/Notario, listado de trámites, creación, aprobación/devolución, eliminación por Persona y consulta de feriados.
+- **Xano (pendiente de configurar y verificar):** autenticación real y permisos obligatorios en backend. Los endpoints actuales tenían errores "Deleted Table" en capturas previas.
+- **Pruebas:** reglas de formulario/roles escritas en JUnit; compilación Gradle y prueba en emulador pendientes.
+- **Rúbrica EFT:** aún no facilitada. La pauta EP4 anterior requería microservicios Spring Boot, 80% de cobertura y APK firmado, lo cual **no está implementado aquí**.
 
-**Importante:** anteriormente Xano devolvía `Query All Records From Deleted Table` / `Invalid name`. No está comprobado que las rutas remotas estén funcionando. No presentar DEMO como si fuera Xano.
+## Flujo que debes mostrar
 
-## Abrir Android Studio
+Persona inicia sesión → POST /auth/login → GET /auth/me → GET /tramites (solo propios) → POST /tramites → Notario inicia sesión → GET /tramites (todos) → PUT /tramites/{id} → Persona ve el cambio.
 
-1. Abrir la carpeta `android/` (contiene `settings.gradle.kts`).
-2. Usar JDK 21 y Android SDK 36. Esperar Gradle Sync.
-3. Ejecutar `app` en emulador. Cambiar entre Modo DEMO / XANO real.
-4. En PowerShell dentro de `android/`:
-   ` .\\gradlew.bat :app:testDebugUnitTest ` y ` .\\gradlew.bat :app:assembleDebug `.
+La separación de datos y permisos tiene que aplicarse en Xano. El filtrado de botones en Android no es seguridad suficiente.
 
-## Qué archivo hace qué
+## Estructura de código
 
-- `MainActivity.kt`: inicia la app.
-- `ui/PantallaNotix.kt`: pinta los formularios, botones y listas.
-- `viewmodel/NotixViewModel.kt`: recibe eventos y controla estado.
-- `viewmodel/ReglasTramite.kt`: valida campos antes de hacer POST.
-- `data/NotixRepository.kt`: separa UI de comunicación remota.
-- `data/NotixApi.kt`: declara GET/POST/PUT/DELETE.
-- `data/RetrofitCliente.kt`: cliente Retrofit + JSON.
-- `data/ApiConfig.kt`: URL base de Xano.
-- `data/Modelos.kt`: datos recibidos y enviados.
-- `data/RepositorioDemo.kt`: implementación local para practicar.
+| Archivo | Responsabilidad |
+| --- | --- |
+| MainActivity.kt | inicia Android y monta Compose |
+| ui/LoginScreen.kt | formulario de registro/login |
+| ui/PantallaNotix.kt | pantallas de trámites y feriados según rol |
+| viewmodel/NotixViewModel.kt | estado de sesión, formularios y acciones |
+| viewmodel/ReglasTramite.kt | validaciones sencillas |
+| data/NotixRepository.kt | comunica ViewModel con Retrofit |
+| data/NotixApi.kt | contratos HTTP de Xano |
+| data/RetrofitCliente.kt | base URL, Gson y Retrofit |
+| data/ApiConfig.kt | dirección del API Group de Xano |
+| data/Modelos.kt | objetos JSON y solicitudes |
 
-**Recorrido de Crear:** Pantalla → ViewModel → Validación → Repositorio → Retrofit → Xano → Database.
+**Recorrido:** botón → ViewModel → Repository → Retrofit (NotixApi) → Xano → tabla Database.
 
-## Endpoints esperados
+## Abrir en Android Studio (Windows)
 
-Base URL: `https://x8ki-letl-twmt.n7.xano.io/api:8Q9ARAS-/`
+1. Abrir carpeta `android/` de este repositorio.
+2. Usar Android SDK 36, JDK 21 y sincronizar Gradle.
+3. Ejecutar la app y comprobar login. Sin la configuración de Xano documentada en `XANO_AUTENTICACION.md`, el login no podrá completarse.
+4. En la terminal de Android Studio/PowerShell, dentro de `android/`:
 
-| Método | Ruta | Función |
-|---|---|---|
-| GET | /usuarios | consultar usuarios |
-| GET | /tramites | consultar trámites |
-| GET | /feriados | consultar feriados |
-| POST | /tramites | crear |
-| PUT | /tramites/{tramites_id} | actualizar estado |
-| DELETE | /tramites/{tramites_id} | eliminar |
+```powershell
+.\gradlew.bat :app:testDebugUnitTest
+.\gradlew.bat :app:assembleDebug
+```
 
-Comprueba el contrato real de Xano con Run & Debug antes de usar el modo XANO. El PUT envía usuario_id, tipo_tramite, descripcion y estado.
+## Seguridad y limitaciones
 
-## Estado y alcance
+- No almacena la contraseña; guarda el token solo en memoria del ViewModel y lo descarta al cerrar sesión. Al reiniciar se requiere login.
+- La aplicación no incluye un modo demo ni usuarios/contraseñas falsas que simulen autenticación.
+- Se utiliza HTTPS con Xano y la cabecera Bearer para rutas protegidas.
+- Endpoints actuales de Xano deben ajustarse al contrato exacto de `XANO_AUTENTICACION.md`.
+- **No reutilizar/compartir datos personales reales en el ambiente académico.**
+- El proyecto no reemplaza requisitos aún desconocidos de la rúbrica EFT.
 
-- Pruebas Kotlin/JVM aisladas de reglas y CRUD local: superadas en preparación.
-- **Pendiente:** Android Gradle Sync, APK, pruebas con emulador, CRUD Xano real.
-- **Pendiente:** rúbrica del Examen Final Transversal. No se afirma que esta base cubra toda la pauta. La pauta EP4 anterior también requería microservicios Spring Boot, cobertura ≥80 % y APK firmado.
-- No subir datos personales ni contraseñas a endpoints públicos. Desactivar `seed_notix` cuando termine la carga de datos de prueba.
-
-Ver también `GUIA_DEFENSA.md`.

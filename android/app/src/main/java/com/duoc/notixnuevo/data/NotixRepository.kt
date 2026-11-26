@@ -1,26 +1,33 @@
 package com.duoc.notixnuevo.data
 
-interface DatosNotix {
-    suspend fun listarUsuarios(): List<Usuario>
-    suspend fun listarTramites(): List<Tramite>
-    suspend fun listarFeriados(): List<Feriado>
-    suspend fun crear(usuarioId: Long, tipo: String, descripcion: String): Tramite
-    suspend fun cambiarEstado(tramite: Tramite, nuevoEstado: String): Tramite
-    suspend fun eliminar(id: Long)
-}
-
-class NotixRepository(private val api: NotixApi = RetrofitCliente.api) : DatosNotix {
-    override suspend fun listarUsuarios() = api.usuarios()
-    override suspend fun listarTramites() = api.tramites()
-    override suspend fun listarFeriados() = api.feriados()
-    override suspend fun crear(usuarioId: Long, tipo: String, descripcion: String) =
-        api.crear(CrearTramite(usuarioId, tipo, descripcion))
-    override suspend fun cambiarEstado(tramite: Tramite, nuevoEstado: String) =
-        api.actualizar(tramite.id, ActualizarTramite(
-            tramite.usuario_id, tramite.tipo_tramite, tramite.descripcion, nuevoEstado
-        ))
-    override suspend fun eliminar(id: Long) {
-        val response = api.eliminar(id)
-        check(response.isSuccessful) { "Xano devolvio HTTP " + response.code() }
+// Esta clase concentra las peticiones que la interfaz no necesita conocer.
+class NotixRepository(private val api: NotixApi = RetrofitCliente.api) {
+    suspend fun login(correo: String, password: String): Sesion {
+        val respuesta = api.login(LoginRequest(correo.trim(), password))
+        require(respuesta.authToken.isNotBlank()) { "La API no devolvio un token" }
+        return Sesion(respuesta.authToken, api.perfil(bearer(respuesta.authToken)))
     }
+
+    suspend fun registrar(nombre: String, correo: String, password: String): Sesion {
+        val respuesta = api.registro(RegistroRequest(nombre.trim(), correo.trim(), password))
+        require(respuesta.authToken.isNotBlank()) { "La API no devolvio un token" }
+        return Sesion(respuesta.authToken, api.perfil(bearer(respuesta.authToken)))
+    }
+
+    suspend fun tramites(token: String): List<Tramite> = api.tramites(bearer(token))
+
+    suspend fun crear(token: String, tipo: String, descripcion: String): Tramite =
+        api.crear(bearer(token), CrearTramiteRequest(tipo.trim(), descripcion.trim()))
+
+    suspend fun resolver(token: String, id: Long, estado: String, observacion: String?): Tramite =
+        api.resolver(bearer(token), id, CambiarEstadoRequest(estado, observacion?.trim()))
+
+    suspend fun eliminar(token: String, id: Long) {
+        val respuesta = api.eliminar(bearer(token), id)
+        check(respuesta.isSuccessful) { "Xano devolvio HTTP " + respuesta.code() }
+    }
+
+    suspend fun feriados(): List<Feriado> = api.feriados()
+
+    private fun bearer(token: String) = "Bearer $token"
 }
