@@ -1,55 +1,78 @@
-# Notix-EFT · app académica con autenticación y API REST
+# Estado verificable de Notix EFT
 
-Nueva versión del caso NotariaX orientada a comprender y defender su funcionamiento.
+## Requisitos de la pauta EP4 como referencia
 
-## Estado de implementación
+La pauta recibida es **Evaluación Parcial 4 de DSY1105**, no la del examen EFT. No asumir que son idénticas.
 
-- **Android (código creado):** pantalla de registro e inicio de sesión, separación Persona/Notario, listado de trámites, creación, aprobación/devolución, eliminación por Persona y consulta de feriados.
-- **Xano (pendiente de configurar y verificar):** autenticación real y permisos obligatorios en backend. Los endpoints actuales tenían errores "Deleted Table" en capturas previas.
-- **Pruebas:** reglas de formulario/roles escritas en JUnit; compilación Gradle y prueba en emulador pendientes.
-- **Rúbrica EFT:** aún no facilitada. La pauta EP4 anterior requería microservicios Spring Boot, 80% de cobertura y APK firmado, lo cual **no está implementado aquí**.
+| Indicador | Ponderación | Estado actual |
+| --- | ---: | --- |
+| IE 3.1.1 App, pantallas y flujos sin fallos | 15% | Código preparado, ejecución pendiente |
+| IE 3.1.2 Microservicios Spring Boot con DB y endpoints | 15% | Código de 2 servicios subido, ejecutar pruebas pendiente |
+| IE 3.1.3 CRUD Android ↔ microservicios | 15% | Retrofit configurado; prueba de extremo a extremo pendiente |
+| IE 3.1.4 API externa Retrofit en interfaz | 15% | Xano con respaldo Nager.Date; prueba en vivo pendiente |
+| IE 3.2.1 Pruebas unitarias >=80% de lógica | 15% | Pruebas añadidas; cobertura medida pendiente |
+| IE 3.3.1 APK release firmado y jks | 10% | Pendiente: requiere Android Studio y llave privada |
+| IE 3.3.2 GitHub y Trello colaboración real | 15% | GitHub actualizado; evidencias Trello/comisiones pendientes |
 
-## Flujo que debes mostrar
+**Advertencia de la pauta EP4:** no modificar el repositorio de esa evaluación después de su fecha límite. Este es el repositorio nuevo `Notix-EFT`, no el anterior.
 
-Persona inicia sesión → POST /auth/login → GET /auth/me → GET /tramites (solo propios) → POST /tramites → Notario inicia sesión → GET /tramites (todos) → PUT /tramites/{id} → Persona ve el cambio.
+## Descripción
 
-La separación de datos y permisos tiene que aplicarse en Xano. El filtrado de botones en Android no es seguridad suficiente.
+Notix simula trámites notariales con **cuentas Persona y Notario**, autenticación segura mediante contraseña BCrypt y token JWT, operaciones CRUD y datos persistentes en dos bases H2. No procesa solicitudes notariales reales ni firmas legales.
 
-## Estructura de código
+### Arquitectura
+
+```
+Pantalla Compose → NotixViewModel → NotixRepository → Retrofit
+                                                    ├─ ms-usuarios :8081 → H2 usuarios
+                                                    ├─ ms-tramites :8082 → H2 tramites
+                                                    └─ Xano /feriados → Xano Database
+                                                        (fallback: Nager.Date)
+```
+
+La base Xano NO es la fuente de verdad de usuarios ni trámites: esas entidades corresponden a los microservicios **propios** Spring Boot. Xano se usa como API externa para feriados. Así se distingue claramente el criterio IE 3.1.2/3.1.3 del IE 3.1.4.
+
+## Dónde está cada archivo
 
 | Archivo | Responsabilidad |
 | --- | --- |
-| MainActivity.kt | inicia Android y monta Compose |
-| ui/LoginScreen.kt | formulario de registro/login |
-| ui/PantallaNotix.kt | pantallas de trámites y feriados según rol |
-| viewmodel/NotixViewModel.kt | estado de sesión, formularios y acciones |
-| viewmodel/ReglasTramite.kt | validaciones sencillas |
-| data/NotixRepository.kt | comunica ViewModel con Retrofit |
-| data/NotixApi.kt | contratos HTTP de Xano |
-| data/RetrofitCliente.kt | base URL, Gson y Retrofit |
-| data/ApiConfig.kt | dirección del API Group de Xano |
-| data/Modelos.kt | objetos JSON y solicitudes |
+| `android/.../MainActivity.kt` | Punto de entrada |
+| `android/.../ui/LoginScreen.kt` | Registro/login |
+| `android/.../ui/PantallaNotix.kt` | Formularios, bandeja y lista de feriados |
+| `android/.../viewmodel/NotixViewModel.kt` | Estado y acciones |
+| `android/.../viewmodel/ReglasTramite.kt` | Validación |
+| `android/.../data/NotixRepository.kt` | Elige qué API consultar |
+| `android/.../data/AuthApi.kt` | Rutas HTTP de autenticación |
+| `android/.../data/TramitesApi.kt` | GET/POST/PUT/DELETE de trámites |
+| `android/.../data/FeriadosApi.kt` | Xano y Nager.Date |
+| `android/.../data/RetrofitCliente.kt` | Crea clientes Retrofit |
+| `android/.../data/ApiConfig.kt` | URLs locales y externas |
+| `backend/ms-usuarios/.../AuthController.java` | Signup/login/perfil y JWT |
+| `backend/ms-usuarios/.../UsuarioEntity.java` | Tabla de usuarios en H2 |
+| `backend/ms-tramites/.../TramiteController.java` | CRUD y permisos |
+| `backend/ms-tramites/.../TramiteEntity.java` | Tabla de trámites en H2 |
 
-**Recorrido:** botón → ViewModel → Repository → Retrofit (NotixApi) → Xano → tabla Database.
+La explicación oral está en [GUIA_DEFENSA.md](GUIA_DEFENSA.md) y los pasos exactos en [INICIAR_PROYECTO.md](INICIAR_PROYECTO.md).
 
-## Abrir en Android Studio (Windows)
+## Endpoints
 
-1. Abrir carpeta `android/` de este repositorio.
-2. Usar Android SDK 36, JDK 21 y sincronizar Gradle.
-3. Ejecutar la app y comprobar login. Sin la configuración de Xano documentada en `XANO_AUTENTICACION.md`, el login no podrá completarse.
-4. En la terminal de Android Studio/PowerShell, dentro de `android/`:
+| Método | URL (ruta) | Función |
+| --- | --- | --- |
+| POST | `http://localhost:8081/api/auth/signup` | Crear Persona |
+| POST | `http://localhost:8081/api/auth/login` | Iniciar sesión |
+| GET | `http://localhost:8081/api/auth/me` | Ver cuenta autenticada |
+| GET | `http://localhost:8082/api/tramites` | Persona ve los suyos; Notario todos |
+| POST | `http://localhost:8082/api/tramites` | Crear trámite |
+| PUT | `http://localhost:8082/api/tramites/{id}` | Aprobar/devolver |
+| DELETE | `http://localhost:8082/api/tramites/{id}` | Borrar trámite propio no aprobado |
+| GET | `https://x8ki-letl-twmt.n7.xano.io/api:8Q9ARAS-/feriados` | Consultar feriados de Xano |
+| GET | `https://date.nager.at/api/v3/NextPublicHolidays/CL` | Respaldo externo |
 
-```powershell
-.\gradlew.bat :app:testDebugUnitTest
-.\gradlew.bat :app:assembleDebug
-```
+En Android emulador el PC se representa con `10.0.2.2` en vez de `localhost`. Trámites requiere `Authorization: Bearer <token>`.
 
-## Seguridad y limitaciones
+## Estados y pruebas
 
-- No almacena la contraseña; guarda el token solo en memoria del ViewModel y lo descarta al cerrar sesión. Al reiniciar se requiere login.
-- La aplicación no incluye un modo demo ni usuarios/contraseñas falsas que simulen autenticación.
-- Se utiliza HTTPS con Xano y la cabecera Bearer para rutas protegidas.
-- Endpoints actuales de Xano deben ajustarse al contrato exacto de `XANO_AUTENTICACION.md`.
-- **No reutilizar/compartir datos personales reales en el ambiente académico.**
-- El proyecto no reemplaza requisitos aún desconocidos de la rúbrica EFT.
-
+- Repositorio y código publicados en GitHub.
+- Pruebas escritas en ambos servicios Java y en Android.
+- Las pruebas no son un resultado aprobado hasta que GitHub Actions o Android Studio las ejecute exitosamente.
+- APK firmado, cobertura >=80%, UI en emulador y funcionamiento con Xano: **pendientes de comprobación**.
