@@ -130,7 +130,7 @@ fun PantallaNotix(vm: NotixViewModel) {
                 Text("Feriados", style = MaterialTheme.typography.titleMedium)
             }
             items(e.feriados, key = { it.id }) { feriado ->
-                Text("${feriado.nombre} · ${feriado.fecha}")
+                Text("${feriado.nombre} · ${feriado.fecha} · Fuente: ${feriado.origen ?: "API externa"}")
             }
         }
     }
