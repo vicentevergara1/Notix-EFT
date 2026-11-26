@@ -1,6 +1,10 @@
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    jacoco
 }
 android {
     namespace = "com.duoc.notixnuevo"
@@ -31,4 +35,42 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.14.6")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+}
+
+tasks.withType<Test>().configureEach {
+    extensions.configure<JacocoTaskExtension> {
+        isIncludeNoLocationClasses = true
+        excludes = listOf("jdk.internal.*")
+    }
+}
+
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+    group = "verification"
+    description = "Reporta cobertura de la logica Android (ViewModel, Repository y validaciones)"
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+
+    val kotlinClasses = layout.buildDirectory.dir(
+        "intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes"
+    )
+
+    classDirectories.setFrom(
+        fileTree(kotlinClasses) {
+            include(
+                "com/duoc/notixnuevo/data/NotixRepository*.class",
+                "com/duoc/notixnuevo/viewmodel/NotixViewModel*.class",
+                "com/duoc/notixnuevo/viewmodel/ReglasTramiteKt*.class"
+            )
+        }
+    )
+    sourceDirectories.setFrom(files("src/main/java"))
+    executionData.setFrom(
+        fileTree(layout.buildDirectory.dir("jacoco")) {
+            include("*.exec")
+        }
+    )
 }

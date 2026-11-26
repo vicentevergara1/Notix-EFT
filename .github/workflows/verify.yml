@@ -41,4 +41,30 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:jacocoTestReport --stacktrace
+
+      - name: Mostrar porcentaje de cobertura de lógica
+        working-directory: android
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          archivo = Path("app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml")
+          if not archivo.exists():
+              raise SystemExit("Falta el archivo XML JaCoCo")
+          root = ET.parse(archivo).getroot()
+          counters = [x for x in root.findall("counter") if x.get("type") == "LINE"]
+          if not counters:
+              raise SystemExit("JaCoCo no reporto lineas de codigo")
+          c = counters[0]
+          cubiertas = int(c.get("covered"))
+          total = cubiertas + int(c.get("missed"))
+          if not total:
+              raise SystemExit("Reporte sin clases incluidas: revisar classDirectories")
+          print(f"COBERTURA DE LOGICA ANDROID: {100 * cubiertas / total:.2f}% ({cubiertas}/{total} lineas)")
+          print("OBJETIVO DE LA PAUTA EP4: >=80%")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-android-jacoco
+          path: android/app/build/reports/jacoco/jacocoTestReport/
