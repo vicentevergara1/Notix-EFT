@@ -61,7 +61,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public UsuarioResponse perfil(org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt) {
+    public UsuarioResponse perfil(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt) {
         long id = ((Number) jwt.getClaim("uid")).longValue();
         UsuarioEntity usuario = usuarios.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Cuenta ya no existe"));
