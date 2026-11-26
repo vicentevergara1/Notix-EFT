@@ -32,7 +32,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      - name: Instalar SDK Android 36
+        run: |
+          SDKM="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          if [ -z "$SDKM" ]; then echo "No se encontro sdkmanager"; exit 1; fi
+          "$SDKM" --install "platforms;android-36" "build-tools;36.0.0"
       - name: Compilar y ejecutar pruebas Android JVM
         working-directory: android
         run: |
