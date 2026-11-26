@@ -47,14 +47,16 @@ class NotixViewModel(
     }
 
     private suspend fun iniciar(sesion: Sesion) {
+        // El login no se da por completado si la API de tramites falla.
+        val tramites = repositorio.tramites(sesion.token)
+        val feriados = runCatching { repositorio.feriados() }
         token = sesion.token
-        val tramites = runCatching { repositorio.tramites(sesion.token) }.getOrDefault(emptyList())
-        val feriados = runCatching { repositorio.feriados() }.getOrDefault(emptyList())
         estado = EstadoPantalla(
             usuario = sesion.usuario,
             tramites = tramites,
-            feriados = feriados,
-            mensaje = "Sesion iniciada"
+            feriados = feriados.getOrDefault(emptyList()),
+            mensaje = if (feriados.isFailure) "Sesion iniciada; feriados no disponibles"
+                else "Sesion iniciada"
         )
     }
 
@@ -85,8 +87,13 @@ class NotixViewModel(
     fun cargarDatos() = ejecutar {
         val t = tokenActivo()
         val lista = repositorio.tramites(t)
-        val feriados = runCatching { repositorio.feriados() }.getOrDefault(emptyList())
-        estado = estado.copy(tramites = lista, feriados = feriados, mensaje = "Datos actualizados")
+        val feriados = runCatching { repositorio.feriados() }
+        estado = estado.copy(
+            tramites = lista,
+            feriados = feriados.getOrDefault(estado.feriados),
+            mensaje = if (feriados.isFailure) "Tramites actualizados; feriados no disponibles"
+                else "Datos actualizados"
+        )
     }
 
     fun crearTramite(tipo: String, descripcion: String) {
