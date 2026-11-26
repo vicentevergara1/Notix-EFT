@@ -109,7 +109,21 @@ La tabla `usuarios` y `tramites` de Xano NO es la base de datos de los microserv
 
 ## 8. APK firmado
 
-El APK release **aún no está generado**. En Android Studio entra a **Build → Generate Signed App Bundle / APK → APK**, crea/selecciona un keystore `.jks` y genera release. Conserva el `.jks` y las contraseñas en privado. Comprueba que el APK release se instale y funcione.
+El APK release **aún no está generado**. En Android Studio entra a **Build → Generate Signed App Bundle / APK → APK**, crea/selecciona un keystore `.jks` y genera release. Conserva el `.jks` y las contraseñas en privado.
+
+Alternativamente, en PowerShell puedes generar una llave privada en tu carpeta de usuario con `keytool` y firmar por variables de entorno:
+
+```powershell
+keytool -genkeypair -v -keystore "$env:USERPROFILE\\notix-release.jks" -alias notix -keyalg RSA -keysize 3072 -validity 3650
+$env:NOTIX_KEYSTORE = "$env:USERPROFILE\\notix-release.jks"
+$env:NOTIX_STORE_PASSWORD = "TU_CLAVE_PRIVADA_DE_ALMACEN"
+$env:NOTIX_KEY_ALIAS = "notix"
+$env:NOTIX_KEY_PASSWORD = "TU_CLAVE_PRIVADA_DE_ALIAS"
+cd RUTA_AL_REPOSITORIO\\Notix-EFT\\android
+.\\gradlew.bat :app:assembleRelease
+```
+
+Los valores de contraseña se sustituyen por los que escogiste para el keystore. Si se configuraron correctamente, la APK release se genera en `android/app/build/outputs/apk/release/`; debes comprobar la firma con `apksigner verify --print-certs` y probar la instalación antes de entregarla. Estas variables se usan solo localmente y **no se guardan en GitHub**.
 
 La pauta EP4 pide evidencia de APK firmado, captura y archivos. Para el EFT, sigue el método de entrega indicado por el profesor; no publiques contraseñas ni llaves privadas en un repositorio abierto.
 

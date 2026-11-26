@@ -17,6 +17,21 @@ android {
         versionName = "1.0"
     }
     buildFeatures { compose = true }
+    // Firma release: usa variables de entorno privadas, nunca claves en Git.
+    val keystore = providers.environmentVariable("NOTIX_KEYSTORE").orNull
+    val storePass = providers.environmentVariable("NOTIX_STORE_PASSWORD").orNull
+    val alias = providers.environmentVariable("NOTIX_KEY_ALIAS").orNull
+    val keyPass = providers.environmentVariable("NOTIX_KEY_PASSWORD").orNull
+    if (!keystore.isNullOrBlank() && !storePass.isNullOrBlank() &&
+        !alias.isNullOrBlank() && !keyPass.isNullOrBlank()) {
+        signingConfigs.create("notixRelease") {
+            storeFile = file(keystore)
+            storePassword = storePass
+            keyAlias = alias
+            keyPassword = keyPass
+        }
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("notixRelease")
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
